@@ -41,6 +41,6 @@ object NerModelCreator {
 
     pipeline
       .fit(trainingConll)
-      .write.save(s"target/trainedModel${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
+      .write.save(s"target/trainedModel-${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
   }
 }

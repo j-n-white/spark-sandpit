@@ -78,7 +78,7 @@ object TrainingDataCreator {
       .withColumn("outputLines", outputLinesUdf($"tokens", $"posResult", $"tags"))
       .select("outputLines")
       .repartition(1)
-      .write.text(s"target/trainingData${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
+      .write.text(s"target/trainingData-${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
   }
 
 }
