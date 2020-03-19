@@ -1,0 +1,11 @@
+I PRP O
+'m VBP O
+Bob NAME O
+, , O
+a DT O
+Java TECH TECH
+Developer ROLE O
+for IN O
+Bob ORGANISATION O
+Corp. ORGANISATION O
+. . O
