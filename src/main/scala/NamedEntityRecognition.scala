@@ -1,11 +1,39 @@
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 import com.johnsnowlabs.nlp.DocumentAssembler
 import com.johnsnowlabs.nlp.annotator.{BertEmbeddings, NerDLModel, SentenceDetector, Tokenizer}
 import com.johnsnowlabs.nlp.annotators.ner.NerConverter
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
 
 object NamedEntityRecognition {
 
+  val annotateResult: (Seq[String], Seq[String]) => String = (tokens, tags) => {
+    var output = Seq.empty[String]
+    for (i <- tokens.indices) {
+      if ("B-TECH".equals(tags(i))) {
+        var annotatedToken = "[TECH: " + tokens(i)
+        if (i == tokens.length - 1 || !"I-TECH".equals(tags(i+1))) {
+          annotatedToken = annotatedToken + "]"
+        }
+        output = output :+ annotatedToken
+      } else if ("I-TECH".equals(tags(i))) {
+        var annotatedToken = tokens(i)
+        if (i == 0 || "O".equals(tags(i-1))) {
+          annotatedToken = "[TECH: " + annotatedToken
+        }
+        if (i == tokens.length - 1 || !"I-TECH".equals(tags(i+1))) {
+          annotatedToken = annotatedToken + "]"
+        }
+        output = output :+ annotatedToken
+      } else {
+        output = output :+ tokens(i)
+      }
+    }
+    output.mkString(" ")
+  }
 
   def main(args: Array[String]): Unit = {
     val profileFileName = "src/main/resources/exampleProfile.txt"
@@ -13,6 +41,8 @@ object NamedEntityRecognition {
       .appName("Named Entity Recognition")
       .config("spark.master", "local")
       .getOrCreate()
+
+    import spark.implicits._
 
     val profile = spark.read
       .textFile(profileFileName)
@@ -37,7 +67,7 @@ object NamedEntityRecognition {
       .setCaseSensitive(false)
       .setPoolingLayer(0)
 
-    val loaded_ner_model = NerDLModel.load("target/trainedModel2020-03-19_100323/stages/1_NerDLModel_57a1eaf3f640")
+    val loaded_ner_model = NerDLModel.load("target/trainedModel-2020-03-20_114646/stages/1_NerDLModel_44cfadaffec7")
       .setInputCols("sentence", "token", "bert")
       .setOutputCol("ner")
 
@@ -60,8 +90,11 @@ object NamedEntityRecognition {
       .transform(profile)
       .persist()
 
+
+    val annotateResultUdf = udf(annotateResult)
     resultsFrame
-      .select("token.result", "ner.result")
-      .show(truncate = false)
+      .withColumn("AnnotatedResult", annotateResultUdf($"token.result", $"ner.result"))
+      .select("AnnotatedResult").repartition(1)
+      .write.text(s"target/annotatedResult-${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
   }
 }

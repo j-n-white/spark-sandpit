@@ -16,7 +16,7 @@ object NerModelCreator {
       .config("spark.master", "local")
       .getOrCreate()
 
-    val trainingConll = CoNLL(conllLabelIndex = 2).readDataset(spark, "src/main/resources/realTrainingData.txt")
+    val trainingConll = CoNLL(conllLabelIndex = 2).readDataset(spark, "src/main/resources/trivialTrainingData.txt")
 
     val bert = BertEmbeddings.pretrained("bert_base_uncased", "en")
       .setInputCols("sentence", "token")
