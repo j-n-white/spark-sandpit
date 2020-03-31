@@ -67,7 +67,7 @@ object NamedEntityRecognition {
       .setCaseSensitive(false)
       .setPoolingLayer(0)
 
-    val loaded_ner_model = NerDLModel.load("target/trainedModel-2020-03-20_114646/stages/1_NerDLModel_44cfadaffec7")
+    val loaded_ner_model = NerDLModel.load("target/trainedModel-2020-03-25_163117/stages/1_NerDLModel_0b9b06b77537")
       .setInputCols("sentence", "token", "bert")
       .setOutputCol("ner")
 

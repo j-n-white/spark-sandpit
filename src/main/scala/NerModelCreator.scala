@@ -30,8 +30,8 @@ object NerModelCreator {
       .setOutputCol("ner")
       .setMaxEpochs(5)
       .setRandomSeed(0)
-      .setVerbose(1)
-      .setValidationSplit(1)
+      .setVerbose(4)
+      .setValidationSplit(0.2f)
 
     val pipeline = new Pipeline().
       setStages(Array(
