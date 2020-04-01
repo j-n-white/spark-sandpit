@@ -7,19 +7,7 @@ import org.apache.spark.sql.functions._
 
 object TrainingDataCreator {
 
-  val createTags: (Seq[String], Seq[String]) => Seq[String] = (tokens, techTags) => {
-    var tags = Seq.fill(tokens.length)("O")
-    var index = 0;
-    while (index < tokens.length && tokens.indexOfSlice(techTags, index) != -1) {
-      val start = tokens.indexOfSlice(techTags, index)
-      for (i <- start until start + techTags.length) {
-        val tag = if (i == start) "B-TECH" else "I-TECH"
-        tags = tags.updated(i, tag)
-      }
-      index = start + techTags.length
-    }
-    tags
-  }
+  val createTags: Seq[String] => Seq[String] = tokens =>  Seq.fill(tokens.length)("O")
 
   val createOutputLines: (Seq[String], Seq[String], Seq[String]) => String = (tokens, pos, tags) => {
     var output = Seq.empty[String]
@@ -29,19 +17,8 @@ object TrainingDataCreator {
     output.mkString("")
   }
 
-  val combineTags: (Seq[Seq[String]]) => Seq[String] = (tegSeqs) => tegSeqs.reduce((x, y) => {
-    var mergedTags = x
-    for (i <- x.indices) {
-      if (x(i).equals("O")) {
-        mergedTags = mergedTags.updated(i, y(i))
-      }
-    }
-    mergedTags
-  })
-
   def main(args: Array[String]): Unit = {
-    val profileFileName = "src/main/resources/Profile1.txt"
-    val techFileName = "src/main/resources/Tech.csv"
+    val blogFileName = "src/main/resources/blog/2020-03-19-offscreen-canvas.md"
     val spark = SparkSession.builder
       .appName("Training Data Creator")
       .config("spark.master", "local")
@@ -49,32 +26,19 @@ object TrainingDataCreator {
 
     import spark.implicits._
 
-    val tech = spark.read
-      .textFile(techFileName)
-      .withColumnRenamed("value", "text")
-
     val profile = spark.read
-      .textFile(profileFileName)
+      .textFile(blogFileName)
       .withColumnRenamed("value", "text")
     val pipeline = PretrainedPipeline("explain_document_dl", lang = "en")
 
     val tagUdf = udf(createTags)
-    val combineTagsUdf = udf(combineTags)
     val outputLinesUdf = udf(createOutputLines)
 
-    val techTags = pipeline.transform(tech).withColumn("techTags", $"token.result").select("techTags")
 
     pipeline.transform(profile)
-      .crossJoin(techTags)
       .withColumn("tokens", $"token.result")
       .withColumn("posResult", $"pos.result")
-      .withColumn("tags", tagUdf($"tokens", $"techTags"))
-      .select("tokens", "posResult", "tags", "techTags")
-      .groupBy("tokens")
-      .agg(
-        first("posResult").alias("posResult"),
-        combineTagsUdf(collect_list($"tags")).alias("tags")
-      )
+      .withColumn("tags", tagUdf($"tokens"))
       .withColumn("outputLines", outputLinesUdf($"tokens", $"posResult", $"tags"))
       .select("outputLines")
       .repartition(1)

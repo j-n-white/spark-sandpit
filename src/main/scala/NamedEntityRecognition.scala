@@ -10,33 +10,30 @@ import org.apache.spark.sql.functions._
 
 object NamedEntityRecognition {
 
-  val annotateResult: (Seq[String], Seq[String]) => String = (tokens, tags) => {
+  def addKeyword(output: Seq[String], currentKeyword: String): Seq[String] =
+    if(currentKeyword != null) output :+ currentKeyword else output
+
+  val getKeywords: (Seq[String], Seq[String]) => Seq[String] = (tokens, tags) => {
     var output = Seq.empty[String]
+    var currentKeyword: String = null
     for (i <- tokens.indices) {
-      if ("B-TECH".equals(tags(i))) {
-        var annotatedToken = "[TECH: " + tokens(i)
-        if (i == tokens.length - 1 || !"I-TECH".equals(tags(i+1))) {
-          annotatedToken = annotatedToken + "]"
-        }
-        output = output :+ annotatedToken
-      } else if ("I-TECH".equals(tags(i))) {
-        var annotatedToken = tokens(i)
+      if ("B-KEYWORD".equals(tags(i))) {
+        output = addKeyword(output, currentKeyword)
+        currentKeyword = tokens(i)
+      } else if ("I-KEYWORD".equals(tags(i))) {
         if (i == 0 || "O".equals(tags(i-1))) {
-          annotatedToken = "[TECH: " + annotatedToken
+          output = addKeyword(output, currentKeyword)
+          currentKeyword = tokens(i)
+        } else {
+          currentKeyword = currentKeyword + tokens(i)
         }
-        if (i == tokens.length - 1 || !"I-TECH".equals(tags(i+1))) {
-          annotatedToken = annotatedToken + "]"
-        }
-        output = output :+ annotatedToken
-      } else {
-        output = output :+ tokens(i)
       }
     }
-    output.mkString(" ")
+    addKeyword(output, currentKeyword)
   }
 
   def main(args: Array[String]): Unit = {
-    val profileFileName = "src/main/resources/exampleProfile.txt"
+    val profileFileName = "src/main/resources/blog/2020-03-30-Finding-the-right-words.md"
     val spark = SparkSession.builder
       .appName("Named Entity Recognition")
       .config("spark.master", "local")
@@ -67,7 +64,7 @@ object NamedEntityRecognition {
       .setCaseSensitive(false)
       .setPoolingLayer(0)
 
-    val loaded_ner_model = NerDLModel.load("target/trainedModel-2020-03-25_163117/stages/1_NerDLModel_0b9b06b77537")
+    val loaded_ner_model = NerDLModel.load("target/trainedModel-2020-03-31_151441/stages/1_NerDLModel_83e23a7253bc")
       .setInputCols("sentence", "token", "bert")
       .setOutputCol("ner")
 
@@ -91,10 +88,15 @@ object NamedEntityRecognition {
       .persist()
 
 
-    val annotateResultUdf = udf(annotateResult)
+    val getKeywordsUdf = udf(getKeywords)
     resultsFrame
-      .withColumn("AnnotatedResult", annotateResultUdf($"token.result", $"ner.result"))
-      .select("AnnotatedResult").repartition(1)
-      .write.text(s"target/annotatedResult-${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
+      .withColumn("Keywords", getKeywordsUdf($"token.result", $"ner.result"))
+      .withColumn("explodedKeywords", explode($"Keywords"))
+      .select("explodedKeywords")
+      .groupBy("explodedKeywords")
+      .agg(count("*").as("count"))
+      .orderBy($"count".desc)
+      .repartition(1)
+      .write.csv(s"target/keywordCount-${LocalDateTime.now.format(DateTimeFormatter.ofPattern("YYYY-MM-dd_HHmmss"))}")
   }
 }
